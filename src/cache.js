@@ -95,7 +95,7 @@ const orderDocs = (fieldsArray, docs) =>
   )
 
 export const createCachingMethods = ({ collection, model, cache }) => {
-  const loader = new DataLoader(async ejsonArray => {
+  const loader = new DataLoader(async (ejsonArray, limit, skip) => {
     const fieldsArray = ejsonArray.map(EJSON.parse)
     log('fieldsArray', fieldsArray)
 
@@ -134,9 +134,16 @@ export const createCachingMethods = ({ collection, model, cache }) => {
           }
     log('filter: ', filter)
 
-    const findPromise = model
-      ? model.find(filter).exec()
-      : collection.find(filter).toArray()
+    let findPromise
+    if (limit && skip) {
+      findPromise = model
+        ? model.find(filter).limit(limit).skip(skip).exec()
+        : collection.find(filter).limit(limit).skip(skip).toArray()
+    } else {
+      findPromise = model
+        ? model.find(filter).exec()
+        : collection.find(filter).toArray()
+    }
 
     const results = await findPromise
     log('results: ', results)
@@ -172,8 +179,11 @@ export const createCachingMethods = ({ collection, model, cache }) => {
     findManyByIds: (ids, { ttl } = {}) => {
       return Promise.all(ids.map(id => methods.findOneById(id, { ttl })))
     },
-    findByFields: async (fields, { ttl } = {}) => {
-      const { cleanedFields, loaderKey } = prepFields(fields)
+    findByFields: async (fields, { ttl, pageNumber, pageSize } = {}) => {
+      const skip = pageNumber * pageSize
+      const limit = pageSize
+
+      const { cleanedFields, loaderKey } = prepFields({ ...fields })
       const cacheKey = cachePrefix + loaderKey
 
       const cacheDoc = await cache.get(cacheKey)
@@ -191,7 +201,7 @@ export const createCachingMethods = ({ collection, model, cache }) => {
           fieldArray.map(value => {
             const filter = {}
             filter[fieldNames[0]] = value
-            return loader.load(EJSON.stringify(filter))
+            return loader.load(EJSON.stringify(filter), limit, skip)
           })
         )
         docs = [].concat(...docsArray)

@@ -30,8 +30,10 @@ declare module 'apollo-datasource-mongodb' {
 
   export interface Options {
     ttl: number
+    pageNumber?: number
+    pageSize?: number
   }
-
+  
   export class MongoDataSource<TData, TContext = any> extends DataSource<
     TContext
   > {
